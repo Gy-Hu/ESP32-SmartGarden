@@ -1,6 +1,7 @@
 /*
  * Rui Santos 
  * Complete Project Details http://randomnerdtutorials.com
+ * https://randomnerdtutorials.com/esp32-esp8266-publish-sensor-readings-to-google-sheets/
  */
  
 //#ifdef ESP32
