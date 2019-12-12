@@ -44,7 +44,7 @@ char auth[] = "N3dGQKaU_AY3Mwm6Afo4mJAxBYCZEvRs";
 // Your WiFi credentials.
 // Set password to "" for open networks.
 char ssid[] = "OpenWrt-2.4G";
-char pass[] = "Gary971228";
+char pass[] = "";
 
 void setup()
 {
