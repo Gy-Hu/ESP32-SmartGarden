@@ -11,7 +11,7 @@
 
 // Replace with your network credentials
 const char* ssid = "OpenWrt-2.4G";
-const char* password = "Gary971228";
+const char* password = "";
 
 #define DHTPIN 16     // Digital pin connected to the DHT sensor
 
