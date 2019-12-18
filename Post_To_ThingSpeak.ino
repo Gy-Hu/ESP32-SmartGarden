@@ -1,5 +1,5 @@
 //from https://iotdesignpro.com/projects/iot-based-temperature-humidity-monitoring-over-thingspeak-using-esp8266
-
+//API 6EW3CMEMYTF8GXD5
 #include <DHT.h>  
 #include <ESP8266WiFi.h>
 String apiKey = "Your API KEY";     //  Enter your Write API key here
