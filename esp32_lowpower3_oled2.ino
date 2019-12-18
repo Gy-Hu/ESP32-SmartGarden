@@ -1,3 +1,5 @@
+//from https://www.elektormagazine.com/labs/esp32-thingspeak-find-your-network-connect-and-upload-1
+
 #ifdef __cplusplus
 extern "C" {
 uint8_t temprature_sens_read();
