@@ -11,7 +11,7 @@
  * 电容式继电器检测湿度 （这个不控制继电器开断）√
  * 发送到谷歌表格 √
  * PPM检测空气质量
- * data send到thingspeak
+ * data send到thingspeak √
  * 雨滴检测
  * dht的数据在服务器中显示出来（esp32作为服务器显示数据）
  * 蜂鸣器
@@ -19,7 +19,11 @@
  * 舵机
  * 
  * 未解决的小问题：
- * 电容式的土壤湿度传感器读数没有变化
+ * 电容式的土壤湿度传感器读数没有变化 √（换了analog pin以后就有变化了）
+ * dht11的值变化不明显 考虑加上dht22的值可能会更好（或者加个电阻啥的）
+ * google sheet只能放三个column 不能把电容式土壤湿度传感器的值也放进去
+ * 检查一下程序执行的顺序
+ * 把无意义的换行删除 增加有意义的输出
  * 
  * 关于服务器显示数据部分：
  * 先完成简易版（就是只有plian text的版本 确保数据可以正常被显示在html)
@@ -33,7 +37,7 @@
  * 
  * Pin脚的注释：
  * 土壤（湿敏）14
- * 土壤（电容）2
+ * 土壤（电容）39
  * 水泵继电器控制开关 27
  * 蜂鸣器 4
  * dht11 16
@@ -45,12 +49,13 @@
 #include <Wire.h>
 #include <WiFi.h>
 #include <DHT.h>
+#include <ThingSpeak.h>
 /*------------------------------------library part(end)----------------------------------------*/
 
 /*-------------------------------------define pin part(start)-------------------------------------*/
 #define Hsoil 14 //湿敏电阻 土壤湿度的Pin口
 #define pinRelay 27 //继电器的Pin口
-#define SensorPin 2 //电容式土壤湿度传感器的pin口
+#define SensorPin 39 //电容式土壤湿度传感器的pin口
 #define DHTPIN 16     //DHT11的pin口
 /*-------------------------------------define pin part(end)-------------------------------------*/
 
@@ -60,10 +65,14 @@
 int SH=-1;//土壤湿度的初始值设置成-1（这个是湿敏电阻读取的值）
 int moi = 0; //这个是电容式土壤湿度传感器的值 仅做观察和存储数据用
 float humidity,temperature,fahrenheit;//设置dht11读取的变量值
+String apiKey = "6EW3CMEMYTF8GXD5";//Thingspeak apiKey
 const char* ssid = "OpenWrt-2.4G";
 const char* password = "Gary971228";
 const char* resource = "/trigger/ESP32GS/with/key/bSjdpYyPK4iF9D_KL6gNRo";// Replace with your unique IFTTT URL resource
 const char* server = "maker.ifttt.com";// Maker Webhooks IFTTT
+const char* server2 = "api.thingspeak.com"; //thingspeak, data visualization
+unsigned long CHANNEL = 941068;//Your ThingSpeak Channel ID;
+const char *WRITE_API = "6EW3CMEMYTF8GXD5";//"Your ThingSpeak Write API";
 /*------------------------------------initialize the variable(end）-------------------------------*/
 
 
@@ -157,6 +166,28 @@ void makeIFTTTRequest() {
   client.stop(); 
 }
 
+//这个函数是把数据上传到thingspeak
+void UploadToThingspeak(){
+  delay(20000);
+  WiFiClient client;
+  ThingSpeak.begin(client);
+  ThingSpeak.setField(1, humidity);
+  ThingSpeak.setField(2, temperature);
+  ThingSpeak.setField(3, fahrenheit);
+  ThingSpeak.setField(5, moi);
+  ThingSpeak.setField(6, SH);
+
+    // Write to the ThingSpeak channel
+    int x = ThingSpeak.writeFields(CHANNEL, WRITE_API);
+    if (x == 200) {
+      Serial.println("Channel update successful.");
+    }
+    else {
+      Serial.println("Problem updating channel. HTTP error code " + String(x));
+    }
+    client.stop(); 
+}
+
 //这个函数就是用来读取dht11的温度值
 float readDHTTemperature() {
   float t = dht.readTemperature();
@@ -193,6 +224,9 @@ float readfahrenheit() {
   }
 }
 
+
+
+
 /*----------------------------------initialize the function(end)-------------------------------*/
 
 /*----------------------------------initialize the wifi(Start)-------------------------------*/
@@ -228,6 +262,7 @@ float readfahrenheit() {
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);//begin at this frequency
+  WiFi.mode(WIFI_STA);//thingspeak需要用到这一行 如果影响别的功能就可以删除
   initWifi();//make the wifi connection works
   dht.begin(); // initialize dht
 /*--------------------------------setup the hsoil and relay(start)---------------------------------*/
@@ -344,7 +379,7 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
   Serial.print("The data read from capactive sensor is :");
   Serial.print(moi);
   Serial.print("\n");
-  if(moi > 3000) //which means dry
+  if(moi > 2300) //which means dry
   {
     Serial.print("Data from capactive sensor find: The plant is in dry soil!!\n");
   }
@@ -397,6 +432,7 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
 /*-----------------------------print out the moi constantly(end)------------------------------*/
 
 /*--------------------------upload the sensor data to thingspeak(start)--------------------*/
+UploadToThingspeak();
 /*--------------------------upload the sensor data to thingspeak(end)--------------------*/
 
 /*-----------------------------------RainSensor(start)---------------------------------------*/
