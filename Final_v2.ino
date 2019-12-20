@@ -10,10 +10,10 @@
  * 湿敏电阻检测湿度控制继电器开断 √
  * 电容式继电器检测湿度 （这个不控制继电器开断）√
  * 发送到谷歌表格 √
- * PPM检测空气质量
+ * PPM检测空气质量 √
  * data send到thingspeak √
  * 雨滴检测 √
- * dht的数据在服务器中显示出来（esp32作为服务器显示数据）
+ * dht的数据在服务器中显示出来（esp32作为服务器显示数据）√
  * 蜂鸣器
  * 屏幕显示√
  * 舵机
@@ -26,6 +26,10 @@
  * 把无意义的换行删除 增加有意义的输出
  * 每个传感器需要的电压记录下来
  * oled显示的错误问题（字体大小等等 还有每个步骤最好都在oled屏幕上进行输出）
+ * 最后屏幕显示数值那个部分应该循环一段时间（看微信 自己有记录）
+ * 空气质量传感器的数值好像不准确 800左右 比450（室内正常数值）高出很多 √ （电压应该是5v不是3.3v）
+ * MQ135读数偏小
+ * 服务器显示的数据还不是很好看
  * 
  * 关于服务器显示数据部分：
  * 先完成简易版（就是只有plian text的版本 确保数据可以正常被显示在html)
@@ -62,11 +66,13 @@
 /*------------------------------------library part（start)----------------------------------------*/
 #include <Wire.h>
 #include <WiFi.h>
+#include "ESPAsyncWebServer.h"//注意编译库的顺序！不要变 变了这个编译库的顺序会导致编译失败
 #include <DHT.h>
 #include <ThingSpeak.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_Sensor.h>
+//#include <elapsedMillis.h>//这个是arduino的库 设置时间的 但是没有用上
 /*------------------------------------library part(end)----------------------------------------*/
 
 /*-------------------------------------define pin part(start)-------------------------------------*/
@@ -75,6 +81,7 @@
 #define SensorPin 39 //电容式土壤湿度传感器的pin口
 #define DHTPIN 16     //DHT11的pin口
 #define rain_sensorPin 36 //雨滴传感器的pin口
+#define PPM_analogPin 34 //MQ135 烟雾传感器的Pin口
 /*-------------------------------------define pin part(end)-------------------------------------*/
 
 
@@ -89,12 +96,15 @@ const char* password = "Gary971228";
 const char* resource = "/trigger/ESP32GS/with/key/bSjdpYyPK4iF9D_KL6gNRo";// Replace with your unique IFTTT URL resource
 const char* server = "maker.ifttt.com";// Maker Webhooks IFTTT
 const char* server2 = "api.thingspeak.com"; //thingspeak, data visualization
+AsyncWebServer server3(80);//本地的web服务
 unsigned long CHANNEL = 941068;//Your ThingSpeak Channel ID;
 const char *WRITE_API = "6EW3CMEMYTF8GXD5";//"Your ThingSpeak Write API";
 int rain_sensorValue = 0; //一开始从雨滴传感器获取的模拟信号的值
 const int rain_sensorMin = 0; 
 const int rain_sensorMax = 4095;
 int rain_sensorValue2 = -1; //这个是经过转换的雨滴传感器的模拟信号值 取值在0,1,2,3之间 代表雨滴的大小
+uint32_t period = 5*60000L; //5minutes
+int MQ135 = 0 //烟雾传感器所读出来的值
 /*------------------------------------initialize the variable(end）-------------------------------*/
 
 
@@ -199,6 +209,7 @@ void UploadToThingspeak(){
   ThingSpeak.setField(1, humidity);
   ThingSpeak.setField(2, temperature);
   ThingSpeak.setField(3, fahrenheit);
+  ThingSpeak.setField(4, MQ135);
   ThingSpeak.setField(5, moi);
   ThingSpeak.setField(6, SH);
   ThingSpeak.setField(7, rain_sensorValue);
@@ -342,7 +353,7 @@ void display_soil_environment(){
   display.display(); 
 }
 
-//这个函数用来输出现在的空气质量是好还是差
+//这个函数用来输出现在的空气质量是好还是差（未完成）
 
 
 //这个函数用来输出现在是不是在下雨
@@ -375,7 +386,69 @@ void display_rain_condition(){
         break;
     }
   display.display(); 
-  
+}
+
+//这个函数是获取MQ135 烟雾传感器的值
+int getCo2Measurement() {
+  int co2now[5];           //int array for co2 readings
+  int co2raw = 0;           //int for raw value of co2
+  int Avg_raw = 0;           //int for averaging
+  for (int x = 0;x<5;x++){                   //samplpe co2 5x over 2 seconds
+    co2now[x]=analogRead(PPM_analogPin);
+    delay(200);
+  }
+  for (int x = 0;x<5;x++){                     //add samples together
+    co2raw = co2raw + co2now[x];
+  }
+  Avg_raw = co2raw/5;                            //divide samples by 5
+  int MQ135_SensorValue = Avg_raw;
+  //Serial.println(MQ135_SensorValue);
+  if (MQ135_SensorValue == 0)
+  {
+    return -1;
+  }
+  else
+  {
+    return (int)(MQ135_SensorValue);
+  }
+}
+
+//这个函数是在esp32上建立一个web服务器 数值显示到web服务器当中
+void Local_Server(){
+  //第一个server页是给空气质量的
+    server3.on("/co2", HTTP_GET, [](AsyncWebServerRequest * request) {
+    int measurement = getCo2Measurement(); 
+    String message;
+    MQ135=measurement;//把MQ135读数的传到全局变量中去
+    if(measurement == -1){message = "Sensor is not operating correctly";}
+    else if (measurement<=500)
+    {
+     message = String(measurement) + " ppm" + " Congratulations! Fresh Air!";
+    }
+    else if( measurement>=500 && measurement<=1000 )
+    {
+     message = String(measurement) + " ppm" + " Oops! Not so good air quality!";
+    }
+    else if (measurement>=1000 )
+    {
+      message = String(measurement) + " ppm" + " Emmm... The Air Quality is very poor!";
+    }
+    request->send(200, "text/plain", message);
+    });
+    
+  //第二个server页是给温度的
+    server3.on("/temperature", HTTP_GET, [](AsyncWebServerRequest * request) {
+    //float temperature = dht.getTemperature();
+    request->send(200, "text/plain", String(temperature) + "'C");
+    });
+    
+ //第三个server页是给空气湿度的
+    server3.on("/humidity", HTTP_GET, [](AsyncWebServerRequest * request) {
+    //float humidity = dht.getHumidity(); 
+    request->send(200, "text/plain", String(humidity) + " %");
+    });
+    
+    server3.begin();
 }
 
 /*----------------------------------initialize the function(end)-------------------------------*/
@@ -583,6 +656,9 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
 /*------------------------delay 2 seconds----------------------------*/ 
 /*------------------------------Send data to Google sheets(end)------------------------------------*/
 
+/*-----------------------------Display on server(start)------------------------------*/
+Local_Server();
+/*-----------------------------Display on server(end)------------------------------*/
 
 /*-----------------------------print out the moi constantly(start)------------------------------*/
 /*-----------------------------print out the moi constantly(end)------------------------------*/
@@ -596,12 +672,16 @@ UploadToThingspeak();
 /*--------------------------upload the sensor data to thingspeak(end)--------------------*/
 
 /*-----------------------------Display on the screen (start)------------------------------*/
-display_dht11();
-delay(5000);
-display_soil_environment();
-delay(5000);
-display_rain_condition();
-delay(5000);
+//from https://arduino.stackexchange.com/questions/22272/how-do-i-run-a-loop-for-a-specific-amount-of-time/22278
+//this will loop for 5 minutes
+for( uint32_t tStart = millis();  (millis()-tStart) < period;  ){
+   display_dht11();
+   delay(5000);
+   display_soil_environment();
+   delay(5000);
+   display_rain_condition();
+   delay(5000);
+}
 /*-----------------------------Display on the screen(end)------------------------------*/
 
 }
