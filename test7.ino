@@ -26,23 +26,9 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 DHT dht(DHTPIN, DHTTYPE);
 
-void setup() {
-  Serial.begin(115200);
-
-  dht.begin();
-
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;);
-  }
-  delay(2000);
+void display1(){
   display.clearDisplay();
   display.setTextColor(WHITE);
-}
-
-void loop() {
-  delay(5000);
-
   //read temperature and humidity
   float t = dht.readTemperature();
   float h = dht.readHumidity();
@@ -50,7 +36,7 @@ void loop() {
     Serial.println("Failed to read from DHT sensor!");
   }
   // clear display
-  display.clearDisplay();
+  //display.clearDisplay();
   
   // display temperature
   display.setTextSize(1);
@@ -76,4 +62,34 @@ void loop() {
   display.print(" %"); 
   
   display.display(); 
+}
+
+void display2(){
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 10);
+  // Display static text
+  display.println("Hello, world!");
+  
+  display.display(); 
+}
+
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  }
+  delay(2000);
+}
+
+void loop() {
+  delay(2000);
+  display1();
+  delay(2000);
+  display2();
 }
