@@ -14,23 +14,25 @@
  * data send到thingspeak √
  * 雨滴检测 √
  * dht的数据在服务器中显示出来（esp32作为服务器显示数据）√
- * 蜂鸣器
+ * 蜂鸣器 √
  * 屏幕显示√
  * 舵机
- * IFFF提示植物很干（等等）
  * 
  * 未解决的小问题：
  * 电容式的土壤湿度传感器读数没有变化 √（换了analog pin以后就有变化了）
+ * 最后屏幕显示数值那个部分应该循环一段时间（看微信 自己有记录）√
+ * 空气质量传感器的数值好像不准确 800左右 比450（室内正常数值）高出很多 √ （电压应该是5v不是3.3v）
  * dht11的值变化不明显 考虑加上dht22的值可能会更好（或者加个电阻啥的）
  * google sheet只能放三个column 不能把电容式土壤湿度传感器的值也放进去
  * 检查一下程序执行的顺序
  * 把无意义的换行删除 增加有意义的输出
  * 每个传感器需要的电压记录下来
  * oled显示的错误问题（字体大小等等 还有每个步骤最好都在oled屏幕上进行输出）
- * 最后屏幕显示数值那个部分应该循环一段时间（看微信 自己有记录）
- * 空气质量传感器的数值好像不准确 800左右 比450（室内正常数值）高出很多 √ （电压应该是5v不是3.3v）
- * MQ135读数偏小
+
+ * MQ135读数偏小（这个可以拧灵敏度螺丝调节）
  * 服务器显示的数据还不是很好看
+ * 检测到下雨就停止浇花（进入屏幕放送时间）×（这个不需要了）
+ * 把雨天信息传送给thingspeak/googlesheet
  * 
  * 关于服务器显示数据部分：
  * 先完成简易版（就是只有plian text的版本 确保数据可以正常被显示在html)
@@ -83,6 +85,9 @@
 #define DHTPIN 16     //DHT11的pin口
 #define rain_sensorPin 36 //雨滴传感器的pin口
 #define PPM_analogPin 34 //MQ135 烟雾传感器的Pin口
+#define LEDC_CHANNEL_0 0 //buzzer的channel(因为怕顺序乱了有问题所以这个声明在这里）
+#define LEDC_TIMER_13_BIT 13 // use 13 bit precission for LEDC timer(buzzer相关的初始化)
+#define BUZZER_PIN  4 // 定义buzzer的IO口
 /*-------------------------------------define pin part(end)-------------------------------------*/
 
 
@@ -104,8 +109,10 @@ int rain_sensorValue = 0; //一开始从雨滴传感器获取的模拟信号的�
 const int rain_sensorMin = 0; 
 const int rain_sensorMax = 4095;
 int rain_sensorValue2 = -1; //这个是经过转换的雨滴传感器的模拟信号值 取值在0,1,2,3之间 代表雨滴的大小
-uint32_t period = 5*60000L; //5minutes
-int MQ135 = 0 //烟雾传感器所读出来的值
+uint32_t period = 5*60000L; //屏幕循环放送时间 5minutes
+uint64_t long_period = 1440*60000L; //屏幕循环放送时间 24hour
+uint64_t normal_period = 180*60000L; //屏幕循环放送时间 3hour
+int MQ135 = 0; //烟雾传感器所读出来的值
 /*------------------------------------initialize the variable(end）-------------------------------*/
 
 
@@ -116,6 +123,11 @@ int MQ135 = 0 //烟雾传感器所读出来的值
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 DHT dht(DHTPIN, DHTTYPE);//注意pin和dht类型的定义都必须在这个语句前面！
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);//这个是oled屏幕的初始化
+//创建音乐旋律列表，超级玛丽
+int melody[] = {330, 330, 330, 262, 330, 392, 196, 262, 196, 165, 220, 247, 233, 220, 196, 330, 392, 440, 349, 392, 330, 262, 294, 247, 262, 196, 165, 220, 247, 233, 220, 196, 330, 392,440, 349, 392, 330, 262, 294, 247, 392, 370, 330, 311, 330, 208, 220, 262, 220, 262,
+294, 392, 370, 330, 311, 330, 523, 523, 523, 392, 370, 330, 311, 330, 208, 220, 262,220, 262, 294, 311, 294, 262, 262, 262, 262, 262, 294, 330, 262, 220, 196, 262, 262,262, 262, 294, 330, 262, 262, 262, 262, 294, 330, 262, 220, 196};
+//创建音调持续时间列表
+int noteDurations[] = {8,4,4,8,4,2,2,3,3,3,4,4,8,4,8,8,8,4,8,4,3,8,8,3,3,3,3,4,4,8,4,8,8,8,4,8,4,3,8,8,2,8,8,8,4,4,8,8,4,8,8,3,8,8,8,4,4,4,8,2,8,8,8,4,4,8,8,4,8,8,3,3,3,1,8,4,4,8,4,8,4,8,2,8,4,4,8,4,1,8,4,4,8,4,8,4,8,2};
 /*-------------------------------Other Initialization(end)----------------------------------*/
 
 /*------------------------------html Initialization(start)-----------------------------------------*/
@@ -296,7 +308,7 @@ Serial.println();
 delay(100);
 }
 
-//这个函数用来输出dht11获取的温度和湿度
+//这个函数用来在oled屏幕上显示dht11获取的温度和湿度
 void display_dht11(){
   display.clearDisplay();
   display.setTextColor(WHITE);
@@ -326,7 +338,7 @@ void display_dht11(){
   display.display(); 
 }
 
-//这个函数用来输出电容式土壤湿度传感器的湿度值/还有电阻式土壤湿度传感器的值
+//这个函数用来在oled屏幕上显示电容式土壤湿度传感器的湿度值/还有电阻式土壤湿度传感器的值
 void display_soil_environment(){
   display.clearDisplay();
   display.setTextColor(WHITE);
@@ -354,10 +366,43 @@ void display_soil_environment(){
   display.display(); 
 }
 
-//这个函数用来输出现在的空气质量是好还是差（未完成）
+//这个函数用来在oled屏幕显示现在的空气质量是好还是差
+void display_air_quality(){
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  
+  // display PPM value
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print("PPM value: ");
+  display.setTextSize(2);
+  display.setCursor(0,10);
+  display.print(MQ135);
+  
+  // display air quality
+  display.setTextSize(1);
+  display.setCursor(0, 35);
+  display.print("Air quality: ");
+  display.setTextSize(2);
+  display.setCursor(0, 45);
 
+    if (MQ135<=500)
+    {
+     display.print("Good!");
+    }
+    else if( MQ135>=500 && MQ135<=1000 )
+    {
+     display.print("Bad");
+    }
+    else if (MQ135>=1000 )
+    {
+      display.print("Dangerous");
+    }
 
-//这个函数用来输出现在是不是在下雨
+  display.display(); 
+}
+
+//这个函数用来在oled屏幕上显示现在是不是在下雨
 void display_rain_condition(){
   display.clearDisplay();
   display.setTextColor(WHITE);
@@ -403,6 +448,7 @@ int getCo2Measurement() {
   }
   Avg_raw = co2raw/5;                            //divide samples by 5
   int MQ135_SensorValue = Avg_raw;
+  MQ135=MQ135_SensorValue;//转到全局变量MQ135里面
   //Serial.println(MQ135_SensorValue);
   if (MQ135_SensorValue == 0)
   {
@@ -420,7 +466,7 @@ void Local_Server(){
     server3.on("/co2", HTTP_GET, [](AsyncWebServerRequest * request) {
     int measurement = getCo2Measurement(); 
     String message;
-    MQ135=measurement;//把MQ135读数的传到全局变量中去
+    //MQ135=measurement;//把MQ135读数的传到全局变量中去
     if(measurement == -1){message = "Sensor is not operating correctly";}
     else if (measurement<=500)
     {
@@ -450,6 +496,19 @@ void Local_Server(){
     });
     
     server3.begin();
+}
+
+//这个函数是当该浇花的时候就报警(播放超级马里奥音乐）
+void PlaySong(){
+  int noteDuration;
+  for (int i = 0; i < sizeof(noteDurations); ++i)
+  {
+      noteDuration = 800/noteDurations[i];
+      ledcSetup(LEDC_CHANNEL_0, melody[i]*2, LEDC_TIMER_13_BIT);
+      ledcAttachPin(BUZZER_PIN, LEDC_CHANNEL_0);
+      ledcWrite(LEDC_CHANNEL_0, 50);
+      delay(noteDuration * 1.30);
+  }
 }
 
 /*----------------------------------initialize the function(end)-------------------------------*/
@@ -586,6 +645,7 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
   SH=digitalRead(Hsoil);//0->wet; 1->dry
     
   while(SH){//只要是dry就会一直在这个循环中
+     PlaySong(); //播放超级马里奥主题曲，浇花更有情趣
      Serial.println("Read data from moisture sensor sucessfully! The plant is in dry environment :(\n");
      digitalWrite(pinRelay, LOW);//begin to water the plant
      
@@ -661,9 +721,6 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
 Local_Server();
 /*-----------------------------Display on server(end)------------------------------*/
 
-/*-----------------------------print out the moi constantly(start)------------------------------*/
-/*-----------------------------print out the moi constantly(end)------------------------------*/
-
 /*-----------------------------------RainSensor(start)---------------------------------------*/
 detect_rain();
 /*-----------------------------------RainSensor(end)---------------------------------------*/
@@ -673,14 +730,18 @@ UploadToThingspeak();
 /*--------------------------upload the sensor data to thingspeak(end)--------------------*/
 
 /*-----------------------------Display on the screen (start)------------------------------*/
-//from https://arduino.stackexchange.com/questions/22272/how-do-i-run-a-loop-for-a-specific-amount-of-time/22278
+//（这里还有别的循环一段时间的方法喔）from https://arduino.stackexchange.com/questions/22272/how-do-i-run-a-loop-for-a-specific-amount-of-time/22278
 //this will loop for 5 minutes
-for( uint32_t tStart = millis();  (millis()-tStart) < period;  ){
+//for( uint32_t tStart = millis();  (millis()-tStart) < period;  ){ //这个只是循环5分钟而已
+//for( uint64_t tStart = millis();  (millis()-tStart) < long_period;  ){ //循环太久了 24小时 这个开发板还要记录天气呢
+for( uint64_t tStart = millis();  (millis()-tStart) < normal_period;  ){ //循环3个小时 刚刚好
    display_dht11();
    delay(5000);
    display_soil_environment();
    delay(5000);
    display_rain_condition();
+   delay(5000);
+   display_air_quality();
    delay(5000);
 }
 /*-----------------------------Display on the screen(end)------------------------------*/
