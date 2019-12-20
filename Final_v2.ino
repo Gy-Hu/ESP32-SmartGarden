@@ -12,10 +12,10 @@
  * 发送到谷歌表格 √
  * PPM检测空气质量
  * data send到thingspeak √
- * 雨滴检测
+ * 雨滴检测 √
  * dht的数据在服务器中显示出来（esp32作为服务器显示数据）
  * 蜂鸣器
- * 屏幕显示
+ * 屏幕显示√
  * 舵机
  * 
  * 未解决的小问题：
@@ -24,6 +24,8 @@
  * google sheet只能放三个column 不能把电容式土壤湿度传感器的值也放进去
  * 检查一下程序执行的顺序
  * 把无意义的换行删除 增加有意义的输出
+ * 每个传感器需要的电压记录下来
+ * oled显示的错误问题（字体大小等等 还有每个步骤最好都在oled屏幕上进行输出）
  * 
  * 关于服务器显示数据部分：
  * 先完成简易版（就是只有plian text的版本 确保数据可以正常被显示在html)
@@ -44,12 +46,27 @@
  * 空气质量 34
  * 雨滴传感器 36
  * 
+ * 电压注释：
+ * 水泵 5v
+ * 雨滴传感器 3.3v
+ * 继电器 3.3v
+ * dht11 3.3v-5v
+ * 烟雾传感器 5v
+ * 电容式土壤湿度传感器 3.3v?
+ * 电阻式土壤湿度传感器 3.3v?
+ * 
+ * 其他注释：
+ * 湿敏电阻传感器 0->wet; 1->dry
+ * 
  */
 /*------------------------------------library part（start)----------------------------------------*/
 #include <Wire.h>
 #include <WiFi.h>
 #include <DHT.h>
 #include <ThingSpeak.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_Sensor.h>
 /*------------------------------------library part(end)----------------------------------------*/
 
 /*-------------------------------------define pin part(start)-------------------------------------*/
@@ -57,6 +74,7 @@
 #define pinRelay 27 //继电器的Pin口
 #define SensorPin 39 //电容式土壤湿度传感器的pin口
 #define DHTPIN 16     //DHT11的pin口
+#define rain_sensorPin 36 //雨滴传感器的pin口
 /*-------------------------------------define pin part(end)-------------------------------------*/
 
 
@@ -73,13 +91,20 @@ const char* server = "maker.ifttt.com";// Maker Webhooks IFTTT
 const char* server2 = "api.thingspeak.com"; //thingspeak, data visualization
 unsigned long CHANNEL = 941068;//Your ThingSpeak Channel ID;
 const char *WRITE_API = "6EW3CMEMYTF8GXD5";//"Your ThingSpeak Write API";
+int rain_sensorValue = 0; //一开始从雨滴传感器获取的模拟信号的值
+const int rain_sensorMin = 0; 
+const int rain_sensorMax = 4095;
+int rain_sensorValue2 = -1; //这个是经过转换的雨滴传感器的模拟信号值 取值在0,1,2,3之间 代表雨滴的大小
 /*------------------------------------initialize the variable(end）-------------------------------*/
 
 
 
 /*-------------------------------Other Initialization(start)----------------------------------*/
 #define DHTTYPE DHT11   // DHT 11
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
 DHT dht(DHTPIN, DHTTYPE);//注意pin和dht类型的定义都必须在这个语句前面！
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);//这个是oled屏幕的初始化
 /*-------------------------------Other Initialization(end)----------------------------------*/
 
 /*------------------------------html Initialization(start)-----------------------------------------*/
@@ -176,6 +201,7 @@ void UploadToThingspeak(){
   ThingSpeak.setField(3, fahrenheit);
   ThingSpeak.setField(5, moi);
   ThingSpeak.setField(6, SH);
+  ThingSpeak.setField(7, rain_sensorValue);
 
     // Write to the ThingSpeak channel
     int x = ThingSpeak.writeFields(CHANNEL, WRITE_API);
@@ -224,8 +250,133 @@ float readfahrenheit() {
   }
 }
 
+//这个函数用来获取是否下雨的信息
+void detect_rain(){
+delay(500);
+rain_sensorValue = analogRead(rain_sensorPin);
+//Serial.print(rain_sensorValue);
+//Serial.print("\n");
+
+rain_sensorValue2 = map(rain_sensorValue, rain_sensorMin, rain_sensorMax, 0, 3);
+//Serial.print(rain_sensorValue2);
+//Serial.print("\n"); 
+
+switch (rain_sensorValue2)
+    {
+      case 0:
+        Serial.println("RAINING!");
+        break;
+
+      case 1:
+        Serial.println("SMALL RAIN/RAINING has been stoped");
+        break;
+
+      case 2:
+        Serial.println("NOT RAINING");
+        break;
+        
+      case 3:
+        Serial.println("NOT RAINING");
+        break;
+    }
+
+Serial.println();
+delay(100);
+}
+
+//这个函数用来输出dht11获取的温度和湿度
+void display_dht11(){
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  
+  // display temperature
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print("Temperature: ");
+  display.setTextSize(2);
+  display.setCursor(0,10);
+  display.print(temperature);
+  display.print(" ");
+  display.setTextSize(1);
+  display.cp437(true);
+  display.write(167);
+  display.setTextSize(2);
+  display.print("C");
+  
+  // display humidity
+  display.setTextSize(1);
+  display.setCursor(0, 35);
+  display.print("Humidity: ");
+  display.setTextSize(2);
+  display.setCursor(0, 45);
+  display.print(humidity);
+  display.print(" %"); 
+  display.display(); 
+}
+
+//这个函数用来输出电容式土壤湿度传感器的湿度值/还有电阻式土壤湿度传感器的值
+void display_soil_environment(){
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  
+  // display moisture from capactive sensor
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print("Moisture from sensor1");
+  display.setTextSize(2);
+  display.setCursor(0,10);
+  display.print(moi);
+  
+  // display moisture from resistor sensor
+  display.setTextSize(1);
+  display.setCursor(0, 35);
+  display.print("Moisture from sensor2");
+  display.setTextSize(2);
+  display.setCursor(0, 45);
+  if(SH==1) {
+    display.print("Soil Dry");
+  }
+  else if(SH==0){
+    display.print("Soil Wet");
+  }
+  display.display(); 
+}
+
+//这个函数用来输出现在的空气质量是好还是差
 
 
+//这个函数用来输出现在是不是在下雨
+void display_rain_condition(){
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  
+  display.setTextSize(2);
+  display.setCursor(0,10);
+  display.print("The rain condition is: ");
+  
+  display.setTextSize(2);
+  display.setCursor(0, 45);
+  switch (rain_sensorValue2)
+    {
+      case 0:
+        display.print("RAINING!");
+        break;
+
+      case 1:
+        display.print("SMALL RAIN");
+        break;
+
+      case 2:
+        display.print("NOT RAINING");
+        break;
+        
+      case 3:
+        display.print("NOT RAINING");
+        break;
+    }
+  display.display(); 
+  
+}
 
 /*----------------------------------initialize the function(end)-------------------------------*/
 
@@ -265,6 +416,10 @@ void setup() {
   WiFi.mode(WIFI_STA);//thingspeak需要用到这一行 如果影响别的功能就可以删除
   initWifi();//make the wifi connection works
   dht.begin(); // initialize dht
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {//这个是对于oled屏幕报错排查
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  }
 /*--------------------------------setup the hsoil and relay(start)---------------------------------*/
 /*------------------------delay 0 seconds----------------------------*/ 
   pinMode(Hsoil,INPUT);//input the 0/1 from moisture sensitive resistor
@@ -273,7 +428,7 @@ void setup() {
 /*------------------------delay 0 seconds----------------------------*/   
 /*--------------------------------setup the hsoil and relay(end)---------------------------------*/
 
-
+ 
   
 /*-------setup the wifi/IFTTT/send the data to webhook/store data in google drive(start)---------------*/
 /*-------setup the wifi/IFTTT/send the data to webhook/store data in google drive(end)---------------*/
@@ -316,6 +471,14 @@ void setup() {
 
 
 
+//*******************************************************************************************************************************
+
+
+
+
+
+
+
 /*--------------------------------------Loop part(Start)---------------------------------------*
 //                       _oo0oo_
 //                      o8888888o
@@ -344,7 +507,7 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
   // put your main code here, to run repeatedly:
 
 
-/*------------------------Read the data from moisture sensitive sensor(start)----------------------------*/ 
+/*-----------------Read the data from moisture sensitive sensor/Control relay according to moi(start)-------------------*/ 
 /*------------------------delay 2.5 seconds----------------------------*/ 
   SH=digitalRead(Hsoil);//0->wet; 1->dry
     
@@ -368,7 +531,7 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
   
   delay(1000);
 /*------------------------delay 2.5 seconds----------------------------*/ 
-/*-------------------------Read the data from moisture sensitive sensor(end)----------------------------*/
+/*-----------------Read the data from moisture sensitive sensor/Control relay according to moi(start)-------------------*/ 
 
 
 
@@ -417,26 +580,29 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
   }
   makeIFTTTRequest();       
   delay(15000);
-
 /*------------------------delay 2 seconds----------------------------*/ 
 /*------------------------------Send data to Google sheets(end)------------------------------------*/
 
 
-
-
-
-/*---------------------------Control relay according to moi(start)------------------------*/  
-/*---------------------------Control relay according to moi(end)------------------------*/ 
-
 /*-----------------------------print out the moi constantly(start)------------------------------*/
 /*-----------------------------print out the moi constantly(end)------------------------------*/
+
+/*-----------------------------------RainSensor(start)---------------------------------------*/
+detect_rain();
+/*-----------------------------------RainSensor(end)---------------------------------------*/
 
 /*--------------------------upload the sensor data to thingspeak(start)--------------------*/
 UploadToThingspeak();
 /*--------------------------upload the sensor data to thingspeak(end)--------------------*/
 
-/*-----------------------------------RainSensor(start)---------------------------------------*/
-/*-----------------------------------RainSensor(end)---------------------------------------*/
+/*-----------------------------Display on the screen (start)------------------------------*/
+display_dht11();
+delay(5000);
+display_soil_environment();
+delay(5000);
+display_rain_condition();
+delay(5000);
+/*-----------------------------Display on the screen(end)------------------------------*/
 
 }
 /*--------------------------------------Loop part(End)---------------------------------------*
