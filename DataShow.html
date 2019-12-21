@@ -1,0 +1,54 @@
+<!DOCTYPE HTML><html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="//at.alicdn.com/t/font_1575573_tq30ek653v.css">
+  <style>
+    html {
+     font-family: Arial;
+     display: inline-block;
+     margin: 0px auto;
+     text-align: center;
+    }
+    h2 { font-size: 3.0rem; }
+    p { font-size: 3.0rem; }
+    .units { font-size: 1.2rem; }
+    .dht-labels{
+      font-size: 1.5rem;
+      vertical-align:middle;
+      padding-bottom: 15px;
+    }
+   .iconfont {
+   font-size: 2em; <! --//font-size: inherit; // 或者 font-size: 1em;--> 
+   }
+  </style>
+</head>
+<body>
+  <h2>ESP32 Sensor Data House</h2>
+  <p>
+    <i class="iconfont icon-temperature2" style="color:#059e8a;"></i>
+    <span class="dht-labels">Temperature</span>
+    <span id="temperature">%TEMPERATURE%</span>
+    <sup class="units">&deg;C</sup>
+  </p>
+  <p>
+    <i class="iconfont icon-yyhumidity2" style="color:#00add6;"></i> 
+    <span class="dht-labels">Humidity</span>
+    <span id="humidity">%HUMIDITY%</span>
+    <sup class="units">%</sup>
+  </p>
+  <p>
+    <i class="iconfont icon-rain" style="color:#059e8a;"></i> 
+    <span class="dht-labels">Rain</span> 
+    <span id="temperature">%RAIN%</span>
+  </p>
+  <p>
+    <i class="iconfont icon-soil1" style="color:#00add6;"></i> 
+    <span class="dht-labels">Soil moisture</span> 
+    <span id="temperature">%MOISTURE%</span>
+  </p>
+  <p>
+    <i class="iconfont icon-ziyuan" style="color:#059e8a;"></i> 
+    <span class="dht-labels">Air Quality</span> 
+    <span id="temperature">%PPM%</span>
+  </p>
+</body>
