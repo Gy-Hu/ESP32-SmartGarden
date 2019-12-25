@@ -24,6 +24,7 @@
  * 空气质量传感器的数值好像不准确 800左右 比450（室内正常数值）高出很多 √ （电压应该是5v不是3.3v）
  * 服务器显示的数据还不是很好看（已经解决一半了 剩下就是把数值显示出来）
  * 没水的时候水位探测器监测到然后加水（适合不在家很久的时候）
+ * 遇到极端情况（天气不好等等）发送邮件或者手机消息提示
  * 设置内网穿透等可以让家内访问到esp32 webserver的情况
  * delay的时间可以在web或者blnk上面调节
  * 程序执行的每个步骤都在oled上面显示出来（在notepad内修改）
@@ -484,6 +485,7 @@ void display_soil_environment(){
 
 //这个函数用来在oled屏幕显示现在的空气质量是好还是差
 void display_air_quality(){
+  
   display.clearDisplay();
   display.setTextColor(WHITE);
   
@@ -975,6 +977,7 @@ delay(10000);
 /*-------------------------Display the moisture value(end)----------------------------*/ 
 
 /*-------------------------Display the air quality(start)----------------------------*/ 
+MQ135 = getCo2Measurement();
 display_air_quality();
 delay(10000);
 /*-------------------------Display the air quality(end)----------------------------*/ 
