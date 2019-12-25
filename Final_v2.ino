@@ -22,20 +22,25 @@
  * 电容式的土壤湿度传感器读数没有变化 √（换了analog pin以后就有变化了）
  * 最后屏幕显示数值那个部分应该循环一段时间（看微信 自己有记录）√
  * 空气质量传感器的数值好像不准确 800左右 比450（室内正常数值）高出很多 √ （电压应该是5v不是3.3v）
- * dht11的值变化不明显 考虑加上dht22的值可能会更好（或者加个电阻啥的）
+ * 服务器显示的数据还不是很好看（已经解决一半了 剩下就是把数值显示出来）
+ * 没水的时候水位探测器监测到然后加水（适合不在家很久的时候）
+ * 设置内网穿透等可以让家内访问到esp32 webserver的情况
+ * delay的时间可以在web或者blnk上面调节
+ * 程序执行的每个步骤都在oled上面显示出来（在notepad内修改）
+ * 服务器执行的部分应该放在setup的
+ * dht11的值变化不明显 考虑加上dht22的值可能会更好（或者加个电阻啥的）->最佳解决方案就是换成dht22
  * google sheet只能放三个column 不能把电容式土壤湿度传感器的值也放进去
  * 检查一下程序执行的顺序
  * 把无意义的换行删除 增加有意义的输出
  * 每个传感器需要的电压记录下来
  * oled显示的错误问题（字体大小等等 还有每个步骤最好都在oled屏幕上进行输出）
-
  * MQ135读数偏小（这个可以拧灵敏度螺丝调节）
- * 服务器显示的数据还不是很好看
+
  * 检测到下雨就停止浇花（进入屏幕放送时间）×（这个不需要了）
  * 把雨天信息传送给thingspeak/googlesheet
  * 
  * 关于服务器显示数据部分：
- * 先完成简易版（就是只有plian text的版本 确保数据可以正常被显示在html)
+ * 先完成简易版（就是只有plian text的版本 确保数据可以正常被显示在html) √
  * 随后再做加强版 即让数据可以用比较漂亮的方式显示出来
  * 
  * API 还有密码部分
@@ -407,12 +412,12 @@ void display_rain_condition(){
   display.clearDisplay();
   display.setTextColor(WHITE);
   
-  display.setTextSize(2);
+  display.setTextSize(1);
   display.setCursor(0,10);
-  display.print("The rain condition is: ");
+  display.print("Rain condition is: ");
   
-  display.setTextSize(2);
-  display.setCursor(0, 45);
+  display.setTextSize(1);
+  display.setCursor(0, 20);
   switch (rain_sensorValue2)
     {
       case 0:
@@ -433,6 +438,37 @@ void display_rain_condition(){
     }
   display.display(); 
 }
+
+//这个函数oled显示wifi连接情况
+void display_WIFI(){//放进去loop里面
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  
+  display.setTextSize(1);
+  display.setCursor(0,10);
+  display.print("The System is connceting to ");
+  display.print(String(ssid));
+  
+
+  display.setTextSize(1);
+  display.setCursor(0, 45);
+  display.print("Local Address is ");
+  display.print(WiFi.localIP());
+  
+  display.display(); 
+}
+
+//这个函数oled显示正在设置wifi
+void display_Setting_WIFI(){
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  
+  display.setTextSize(1);
+  display.setCursor(0,10);
+  display.print("Setting the WiFI.....");
+  display.display(); 
+}
+
 
 //这个函数是获取MQ135 烟雾传感器的值
 int getCo2Measurement() {
@@ -464,6 +500,7 @@ int getCo2Measurement() {
 void Local_Server(){
   //第一个server页是给空气质量的
     server3.on("/co2", HTTP_GET, [](AsyncWebServerRequest * request) {
+    /*
     int measurement = getCo2Measurement(); 
     String message;
     //MQ135=measurement;//把MQ135读数的传到全局变量中去
@@ -480,19 +517,20 @@ void Local_Server(){
     {
       message = String(measurement) + " ppm" + " Emmm... The Air Quality is very poor!";
     }
-    request->send(200, "text/plain", message);
+    */
+    request->send(200, "text/plain", String(getCo2Measurement()) + " PPM");
     });
     
   //第二个server页是给温度的
     server3.on("/temperature", HTTP_GET, [](AsyncWebServerRequest * request) {
     //float temperature = dht.getTemperature();
-    request->send(200, "text/plain", String(temperature) + "'C");
+    request->send(200, "text/plain", String(readDHTTemperature()) + "'C");
     });
     
  //第三个server页是给空气湿度的
     server3.on("/humidity", HTTP_GET, [](AsyncWebServerRequest * request) {
     //float humidity = dht.getHumidity(); 
-    request->send(200, "text/plain", String(humidity) + " %");
+    request->send(200, "text/plain", String(readDHTHumidity()) + " %");
     });
     
     server3.begin();
@@ -546,13 +584,16 @@ void PlaySong(){
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);//begin at this frequency
-  WiFi.mode(WIFI_STA);//thingspeak需要用到这一行 如果影响别的功能就可以删除
-  initWifi();//make the wifi connection works
-  dht.begin(); // initialize dht
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {//这个是对于oled屏幕报错排查
     Serial.println(F("SSD1306 allocation failed"));
     for(;;);
+  WiFi.mode(WIFI_STA);//thingspeak需要用到这一行 如果影响别的功能就可以删除
   }
+  
+  //display_Setting_WIFI();
+  display_Setting_WIFI();
+  initWifi();//make the wifi connection works
+  dht.begin(); // initialize dht
 /*--------------------------------setup the hsoil and relay(start)---------------------------------*/
 /*------------------------delay 0 seconds----------------------------*/ 
   pinMode(Hsoil,INPUT);//input the 0/1 from moisture sensitive resistor
@@ -560,6 +601,10 @@ void setup() {
   Serial.println("Setup done the relay and moisture sensitive resistor\n");
 /*------------------------delay 0 seconds----------------------------*/   
 /*--------------------------------setup the hsoil and relay(end)---------------------------------*/
+
+/*-----------------------------Display on server(start)------------------------------*/
+Local_Server();
+/*-----------------------------Display on server(end)------------------------------*/
 
  
   
@@ -638,7 +683,8 @@ void setup() {
 *----------------------------------------------------------------------------------------------*/
 void loop() {//整个loop正式用的时候 10个小时一次循环（因为10个小时确认一次干或者湿就可以了） 测试用的时候15秒一次循环（dht11读取数据的最低周期）
   // put your main code here, to run repeatedly:
-
+  display_WIFI();//显示一下wifi状况
+  delay(10000);
 
 /*-----------------Read the data from moisture sensitive sensor/Control relay according to moi(start)-------------------*/ 
 /*------------------------delay 2.5 seconds----------------------------*/ 
@@ -647,6 +693,14 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
   while(SH){//只要是dry就会一直在这个循环中
      PlaySong(); //播放超级马里奥主题曲，浇花更有情趣
      Serial.println("Read data from moisture sensor sucessfully! The plant is in dry environment :(\n");
+     display.clearDisplay();
+     display.setTextColor(WHITE);
+     display.setTextSize(1);
+     display.setCursor(0,10);
+     display.print("Read data from moisture sensor sucessfully!");
+     display.setCursor(0,20);
+     display.print("plant is in dry environment :(");
+     display.display(); 
      digitalWrite(pinRelay, LOW);//begin to water the plant
      
      delay(1000);
@@ -654,6 +708,14 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
      SH=digitalRead(Hsoil);//更新这个土壤干或者湿的情况
      if(SH==0){
      Serial.println("Congratulations!Finish watering the plant.\n");
+     display.clearDisplay();
+     display.setTextColor(WHITE);
+     display.setTextSize(1);
+     display.setCursor(0,10);
+     display.print("Congratulations!");
+     display.setCursor(0,20);
+     display.print("Finish watering the plant.");
+     display.display(); 
      digitalWrite(pinRelay, HIGH);//stop to water the plant
      }
   }//当SH=0会跳出 即这个时候已经是湿的土壤了
@@ -662,7 +724,14 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
  
   //这里可能是（浇水后->变湿了）或者是（下雨了->本来就很湿）
   Serial.print("The plant is in comfortable environment! No need watering! :)\n");
-  
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextSize(1);
+  display.setCursor(0,10);
+  display.print("The plant is in comfortable environment!");
+  display.setCursor(0,30);
+  display.print("No need watering!");
+  display.display(); 
   delay(1000);
 /*------------------------delay 2.5 seconds----------------------------*/ 
 /*-----------------Read the data from moisture sensitive sensor/Control relay according to moi(start)-------------------*/ 
@@ -689,9 +758,9 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
 /*------------------------Read the data from capactive soil moisture sensor(end)----------------------------*/ 
 
 
-/*-------------------------go to the sleep status(start)----------------------------*/ 
-/*-------------------------go to the sleep status(end)----------------------------*/ 
-
+/*-------------------------Display the moisture value(start)----------------------------*/ 
+display_soil_environment();
+/*-------------------------Display the moisture value(end)----------------------------*/ 
 
 
 
@@ -706,34 +775,72 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
   // Read temperature as Fahrenheit
   fahrenheit = readfahrenheit();
   if (isnan(humidity) || isnan(temperature) || isnan(fahrenheit)){
-    Serial.println("Failed DHT\n");
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setCursor(0,10);
+    display.print("Failed read the DHT11");
+    display.display(); 
+    Serial.println("Failed read the DHT11\n");
     return;
   }
   else{
     Serial.println("Read data from dht11 sucessfully!!\n");
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setCursor(0,10);
+    display.print("Read data from dht11 sucessfully!!");
+    display.display(); 
+    delay(3000);
   }
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextSize(1);
+  display.setCursor(0,10);
+  display.print("Sending data to Google drive");
+  display.display(); 
   makeIFTTTRequest();       
-  delay(15000);
+  delay(5000);
 /*------------------------delay 2 seconds----------------------------*/ 
 /*------------------------------Send data to Google sheets(end)------------------------------------*/
 
-/*-----------------------------Display on server(start)------------------------------*/
-Local_Server();
-/*-----------------------------Display on server(end)------------------------------*/
+/*-------------------------Display the dht11(start)----------------------------*/ 
+display_dht11();
+delay(15000);
+/*-------------------------Display the dht11(end)----------------------------*/ 
 
 /*-----------------------------------RainSensor(start)---------------------------------------*/
 detect_rain();
+display_rain_condition();
+delay(5000);
 /*-----------------------------------RainSensor(end)---------------------------------------*/
 
+
 /*--------------------------upload the sensor data to thingspeak(start)--------------------*/
+display.clearDisplay();
+display.setTextColor(WHITE);
+display.setTextSize(1);
+display.setCursor(0,10);
+display.print("Sending data to ThingSpeak");
+display.display();
 UploadToThingspeak();
+display.clearDisplay();
+display.setTextColor(WHITE);
+display.setTextSize(1);
+display.setCursor(0,10);
+display.print("Data has send to ThingSpeak");
+display.display();
+delay(3000);
 /*--------------------------upload the sensor data to thingspeak(end)--------------------*/
 
+//deprecated
 /*-----------------------------Display on the screen (start)------------------------------*/
 //（这里还有别的循环一段时间的方法喔）from https://arduino.stackexchange.com/questions/22272/how-do-i-run-a-loop-for-a-specific-amount-of-time/22278
 //this will loop for 5 minutes
 //for( uint32_t tStart = millis();  (millis()-tStart) < period;  ){ //这个只是循环5分钟而已
 //for( uint64_t tStart = millis();  (millis()-tStart) < long_period;  ){ //循环太久了 24小时 这个开发板还要记录天气呢
+/*
 for( uint64_t tStart = millis();  (millis()-tStart) < normal_period;  ){ //循环3个小时 刚刚好
    display_dht11();
    delay(5000);
@@ -744,7 +851,9 @@ for( uint64_t tStart = millis();  (millis()-tStart) < normal_period;  ){ //循�
    display_air_quality();
    delay(5000);
 }
+*/
 /*-----------------------------Display on the screen(end)------------------------------*/
+
 
 }
 /*--------------------------------------Loop part(End)---------------------------------------*
