@@ -691,6 +691,39 @@ String processor(const String& var){
   return String();
 }
 
+int read_moi(){
+ int t = analogRead(SensorPin); 
+ return t;
+}
+
+String read_rain_message(){
+rain_sensorValue = analogRead(rain_sensorPin);
+//Serial.print(rain_sensorValue);
+//Serial.print("\n");
+
+rain_sensorValue2 = map(rain_sensorValue, rain_sensorMin, rain_sensorMax, 0, 3);
+//Serial.print(rain_sensorValue2);
+//Serial.print("\n"); 
+
+switch (rain_sensorValue2)
+    {
+      case 0:
+        return String("RAINING!");
+        break;
+
+      case 1:
+        return String("SMALL RAIN/RAINING has been stoped");
+        break;
+
+      case 2:
+        return String("NOT RAINING");
+        break;
+        
+      case 3:
+        return String("NOT RAINING");
+        break;
+    }
+}
 /*----------------------------------initialize the function(end)-------------------------------*/
 
 /*----------------------------------initialize the wifi(Start)-------------------------------*/
@@ -767,12 +800,12 @@ void setup() {
 
  //第四个server页是给土壤湿度的    
     server3.on("/moisture", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "text/plain", String(moi));
+    request->send(200, "text/plain", String(read_moi()));
     });
     
  //第五个server页是给下雨状况的的    
     server3.on("/rain", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(200, "text/plain", String(Rain_Message));
+    request->send(200, "text/plain", String(read_rain_message()));
     });
     server3.begin();
 /*-----------------------------Display on server(end)------------------------------*/
