@@ -80,6 +80,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_Sensor.h>
+#include "SPIFFS.h"
 //#include <elapsedMillis.h>//这个是arduino的库 设置时间的 但是没有用上
 /*------------------------------------library part(end)----------------------------------------*/
 
@@ -118,6 +119,7 @@ uint32_t period = 5*60000L; //屏幕循环放送时间 5minutes
 uint64_t long_period = 1440*60000L; //屏幕循环放送时间 24hour
 uint64_t normal_period = 180*60000L; //屏幕循环放送时间 3hour
 int MQ135 = 0; //烟雾传感器所读出来的值
+String Rain_Message="";
 /*------------------------------------initialize the variable(end）-------------------------------*/
 
 
@@ -133,6 +135,115 @@ int melody[] = {330, 330, 330, 262, 330, 392, 196, 262, 196, 165, 220, 247, 233,
 294, 392, 370, 330, 311, 330, 523, 523, 523, 392, 370, 330, 311, 330, 208, 220, 262,220, 262, 294, 311, 294, 262, 262, 262, 262, 262, 294, 330, 262, 220, 196, 262, 262,262, 262, 294, 330, 262, 262, 262, 262, 294, 330, 262, 220, 196};
 //创建音调持续时间列表
 int noteDurations[] = {8,4,4,8,4,2,2,3,3,3,4,4,8,4,8,8,8,4,8,4,3,8,8,3,3,3,3,4,4,8,4,8,8,8,4,8,4,3,8,8,2,8,8,8,4,4,8,8,4,8,8,3,8,8,8,4,4,4,8,2,8,8,8,4,4,8,8,4,8,8,3,3,3,1,8,4,4,8,4,8,4,8,2,8,4,4,8,4,1,8,4,4,8,4,8,4,8,2};
+
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="//at.alicdn.com/t/font_1575573_tq30ek653v.css">
+  <style>
+    html {
+     font-family: Arial;
+     display: inline-block;
+     margin: 0px auto;
+     text-align: center;
+    }
+    h2 { font-size: 3.0rem; }
+    p { font-size: 3.0rem; }
+    .units { font-size: 1.2rem; }
+    .dht-labels{
+      font-size: 1.5rem;
+      vertical-align:middle;
+      padding-bottom: 15px;
+    }
+   .iconfont {
+   font-size: 2em; <! --//font-size: inherit; // 或者 font-size: 1em;--> 
+   }
+  </style>
+</head>
+<body>
+  <h2>ESP32 Sensor Data House</h2>
+  <p>
+    <i class="iconfont icon-temperature2" style="color:#059e8a;"></i>
+    <span class="dht-labels">Temperature</span>
+    <span id="temperature">%TEMPERATURE%</span>
+    <sup class="units">&deg;C</sup>
+  </p>
+  <p>
+    <i class="iconfont icon-yyhumidity2" style="color:#00add6;"></i> 
+    <span class="dht-labels">Humidity</span>
+    <span id="humidity">%HUMIDITY%</span>
+    <sup class="units">%</sup>
+  </p>
+  <p>
+    <i class="iconfont icon-rain" style="color:#059e8a;"></i> 
+    <span class="dht-labels">Rain</span> 
+    <span id="rain">%RAIN%</span>
+  </p>
+  <p>
+    <i class="iconfont icon-soil1" style="color:#00add6;"></i> 
+    <span class="dht-labels">Soil moisture</span> 
+    <span id="moisture">%MOISTURE%</span>
+  </p>
+  <p>
+    <i class="iconfont icon-ziyuan" style="color:#059e8a;"></i> 
+    <span class="dht-labels">Air Quality</span> 
+    <span id="ppm">%PPM%</span>
+  </p>
+</body>
+<script>
+setInterval(function ( ) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      document.getElementById("temperature").innerHTML = this.responseText;
+    }
+  };
+  xhttp.open("GET", "/temperature", true);
+  xhttp.send();
+}, 10000 ) ;
+setInterval(function ( ) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      document.getElementById("humidity").innerHTML = this.responseText;
+    }
+  };
+  xhttp.open("GET", "/humidity", true);
+  xhttp.send();
+}, 10000 ) ;
+setInterval(function ( ) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      document.getElementById("ppm").innerHTML = this.responseText;
+    }
+  };
+  xhttp.open("GET", "/co2", true);
+  xhttp.send();
+}, 10000 ) ;
+setInterval(function ( ) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      document.getElementById("moisture").innerHTML = this.responseText;
+    }
+  };
+  xhttp.open("GET", "/moisture", true);
+  xhttp.send();
+}, 10000 ) ;
+setInterval(function ( ) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      document.getElementById("rain").innerHTML = this.responseText;
+    }
+  };
+  xhttp.open("GET", "/rain", true);
+  xhttp.send();
+}, 10000 ) ;
+</script>
+</html>)rawliteral";
 /*-------------------------------Other Initialization(end)----------------------------------*/
 
 /*------------------------------html Initialization(start)-----------------------------------------*/
@@ -421,18 +532,22 @@ void display_rain_condition(){
   switch (rain_sensorValue2)
     {
       case 0:
+        Rain_Message="RAINING!";
         display.print("RAINING!");
         break;
 
       case 1:
+        Rain_Message="SMALL RAIN";
         display.print("SMALL RAIN");
         break;
 
       case 2:
+        Rain_Message="NOT RAINING";
         display.print("NOT RAINING");
         break;
         
       case 3:
+        Rain_Message="NOT RAINING";
         display.print("NOT RAINING");
         break;
     }
@@ -496,8 +611,13 @@ int getCo2Measurement() {
   }
 }
 
-//这个函数是在esp32上建立一个web服务器 数值显示到web服务器当中
-void Local_Server(){
+//这个函数是在esp32上建立一个web服务器 数值显示到web服务器当中（废弃了）
+/***
+ *void Local_Server(){
+  //这个是主页显示的
+    server3.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/html", index_html, processor);
+    });
   //第一个server页是给空气质量的
     server3.on("/co2", HTTP_GET, [](AsyncWebServerRequest * request) {
     /*
@@ -517,7 +637,7 @@ void Local_Server(){
     {
       message = String(measurement) + " ppm" + " Emmm... The Air Quality is very poor!";
     }
-    */
+    /
     request->send(200, "text/plain", String(getCo2Measurement()) + " PPM");
     });
     
@@ -535,18 +655,40 @@ void Local_Server(){
     
     server3.begin();
 }
+****/
 
 //这个函数是当该浇花的时候就报警(播放超级马里奥音乐）
 void PlaySong(){
   int noteDuration;
-  for (int i = 0; i < sizeof(noteDurations); ++i)
+  int i = 0;
+  //for (int i = 0; i < 90; ++i)//原本是 sizeof(noteDurations)
+  for( uint32_t tStart = millis();  (millis()-tStart) < (period/55);  )
   {
       noteDuration = 800/noteDurations[i];
       ledcSetup(LEDC_CHANNEL_0, melody[i]*2, LEDC_TIMER_13_BIT);
       ledcAttachPin(BUZZER_PIN, LEDC_CHANNEL_0);
       ledcWrite(LEDC_CHANNEL_0, 50);
       delay(noteDuration * 1.30);
+      ++i;
   }
+}
+
+//这个processor是html处理页的
+String processor(const String& var){
+  //Serial.println(var);
+  if(var == "TEMPERATURE"){
+    return String(readDHTTemperature());
+  }
+  else if(var == "HUMIDITY"){
+    return String(readDHTHumidity());
+  }
+  else if(var == "RAIN"){
+    return String(Rain_Message);
+  }
+  else if(var == "MOISTURE"){
+    return String(MQ135);
+  }
+  return String();
 }
 
 /*----------------------------------initialize the function(end)-------------------------------*/
@@ -603,11 +745,44 @@ void setup() {
 /*--------------------------------setup the hsoil and relay(end)---------------------------------*/
 
 /*-----------------------------Display on server(start)------------------------------*/
-Local_Server();
+   // 第一个server页显示全部信息
+  // server3.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+  // request->send(200, "text/html", str, processor);
+ //  });
+   server3.on("/html", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/test.html", "text/html");
+  });
+  //第一个server页是给空气质量的
+    server3.on("/co2", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/plain", String(getCo2Measurement()) );
+    });
+  //第二个server页是给温度的
+    server3.on("/temperature", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/plain", String(readDHTTemperature()) + "'C");
+    });
+ //第三个server页是给空气湿度的
+    server3.on("/humidity", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/plain", String(readDHTHumidity()) + " %");
+    });
+
+ //第四个server页是给土壤湿度的    
+    server3.on("/moisture", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/plain", String(moi));
+    });
+    
+ //第五个server页是给下雨状况的的    
+    server3.on("/rain", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/plain", String(Rain_Message));
+    });
+    server3.begin();
 /*-----------------------------Display on server(end)------------------------------*/
 
- 
-  
+
+/*-------setup the buzzer(start)---------------*/
+
+/*-------setup the buzzer(end)---------------*/
+     
+
 /*-------setup the wifi/IFTTT/send the data to webhook/store data in google drive(start)---------------*/
 /*-------setup the wifi/IFTTT/send the data to webhook/store data in google drive(end)---------------*/
 
@@ -616,7 +791,6 @@ Local_Server();
 
 /*-------------------------Delay about 15 seconds and go into the loop(start)-----------------------------*/
 /*-------------------------Delay about 15 seconds and go into the loop(end)-----------------------------*/
-
 }
 /*--------------------------------------Setup part(end)--------------------------------------*
 //                       _oo0oo_
@@ -691,7 +865,10 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
   SH=digitalRead(Hsoil);//0->wet; 1->dry
     
   while(SH){//只要是dry就会一直在这个循环中
-     PlaySong(); //播放超级马里奥主题曲，浇花更有情趣
+    // for( uint32_t tStart = millis();  (millis()-tStart) < (period/60);  ){ 
+       PlaySong(); //播放超级马里奥主题曲，浇花更有情趣
+   //  }
+    
      Serial.println("Read data from moisture sensor sucessfully! The plant is in dry environment :(\n");
      display.clearDisplay();
      display.setTextColor(WHITE);
@@ -719,7 +896,8 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
      digitalWrite(pinRelay, HIGH);//stop to water the plant
      }
   }//当SH=0会跳出 即这个时候已经是湿的土壤了
-  
+  //digitalWrite(BUZZER_PIN, HIGH);
+  ledcWrite(LEDC_CHANNEL_0, 0);//把蜂鸣器关闭
   delay(500);
  
   //这里可能是（浇水后->变湿了）或者是（下雨了->本来就很湿）
@@ -760,9 +938,13 @@ void loop() {//整个loop正式用的时候 10个小时一次循环（因为10�
 
 /*-------------------------Display the moisture value(start)----------------------------*/ 
 display_soil_environment();
+delay(10000);
 /*-------------------------Display the moisture value(end)----------------------------*/ 
 
-
+/*-------------------------Display the air quality(start)----------------------------*/ 
+display_air_quality();
+delay(10000);
+/*-------------------------Display the air quality(end)----------------------------*/ 
 
 
 /*------------------------------Send data to Google sheets(start)------------------------------------*/
