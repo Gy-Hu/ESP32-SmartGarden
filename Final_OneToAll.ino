@@ -1,4 +1,4 @@
-
+//水泵问题还没有解决
 #include <Wire.h>
 #include <WiFi.h>
 #include "ESPAsyncWebServer.h"//注意编译库的顺序！不要变 变了这个编译库的顺序会导致编译失败
